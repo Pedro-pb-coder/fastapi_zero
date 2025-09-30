@@ -1,10 +1,13 @@
 from http import HTTPStatus
-from sqlalchemy import create_engine, select
-from fastapi import FastAPI, HTTPException
-from sqlalchemy.orm import Session
-from fastapi_zero.models import User
-from fastapi_zero.settings import Settings
 
+from fastapi import Depends, FastAPI, HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from fastapi_zero.database import get_session
+from fastapi_zero.models import User
+
+# from fastapi_zero.settings import Settings
 from fastapi_zero.schemas import (
     Message,
     UserDB,
@@ -23,20 +26,12 @@ def read_root():
 
 
 @app.post('/users/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
-def create_user(user: UserSchema):
-    
-    engine = create_engine(Settings().DATABASE_URL)
-
-    session = Session(engine)
-
+def create_user(user: UserSchema, session: Session = Depends(get_session)):
     db_user = session.scalar(
         select(User).where(
-            (User.username == user.username) |( User.email == user.email)                                               
-            )
+            (User.username == user.username) | (User.email == user.email)
+        )
     )
-    # Se der um erro : 
-    # ele retornara ou User ou None, assim, se existir, 
-    # a condição acima de um ou outro, ele deve retornar um erro
 
     if db_user:
         if db_user.username == user.username:
@@ -49,6 +44,7 @@ def create_user(user: UserSchema):
                 status_code=HTTPStatus.CONFLICT,
                 detail='Email already exists',
             )
+
     db_user = User(
         username=user.username, password=user.password, email=user.email
     )
@@ -58,21 +54,24 @@ def create_user(user: UserSchema):
 
     return db_user
 
-    # Se não der um erro : 
-    #def get_session():
+    # Se não der um erro :
+    # def get_session():
     #    with Session(engine) as session:
     #        yield session
 
-    #user_with_id = UserDB(**user.model_dump(), id=len(database) + 1)
+    # user_with_id = UserDB(**user.model_dump(), id=len(database) + 1)
 
-    #database.append(user_with_id)
+    # database.append(user_with_id)
 
-    #return user_with_id
+    # return user_with_id
 
 
 @app.get('/users/', status_code=HTTPStatus.OK, response_model=UserList)
-def read_user():
-    return {'users': database}
+def read_user(
+    limit: int = 10, offset: int = 0, session: Session = Depends(get_session)
+):
+    users = session.scalars(select(User).limit(limit).offset(offset))
+    return {'users': users}
 
 
 @app.put(
