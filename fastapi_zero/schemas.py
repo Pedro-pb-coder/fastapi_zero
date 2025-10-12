@@ -18,8 +18,9 @@ class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# class UserDB(UserSchema):
-#    id: int
+class Token(BaseModel):
+    access_token: str
+    token_type: str
 
 
 class UserList(BaseModel):
