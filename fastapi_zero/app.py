@@ -2,6 +2,7 @@ from http import HTTPStatus
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from fastapi_zero.database import get_session
@@ -10,14 +11,12 @@ from fastapi_zero.models import User
 # from fastapi_zero.settings import Settings
 from fastapi_zero.schemas import (
     Message,
-    UserDB,
     UserList,
     UserPublic,
     UserSchema,
 )
 
 app = FastAPI(title=' Meu projeto API')
-database = []
 
 
 @app.get('/', status_code=HTTPStatus.OK, response_model=Message)
@@ -77,25 +76,40 @@ def read_user(
 @app.put(
     '/users/{user_id}', status_code=HTTPStatus.OK, response_model=UserPublic
 )
-def update_user(user_id: int, user: UserSchema):
-    if user_id > len(database) or user_id < 1:
+def update_user(
+    user_id: int, user: UserSchema, session: Session = Depends(get_session)
+):
+    user_db = session.scalar(select(User).where(User.id == user_id))
+    if not user_db:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='User not found'
         )
+    try:
+        user_db.username = user.username
+        user_db.password = user.password
+        user_db.email = user.email
+        session.commit()
+        session.refresh(user_db)
 
-    user_with_id = UserDB(**user.model_dump(), id=user_id)
-    database[user_id - 1] = user_with_id
+        return user_db
 
-    return user_with_id
+    except IntegrityError:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail='Username or Email already exists',
+        )
 
 
 @app.delete('/users/{user_id}', response_model=Message)
-def delete_user(user_id: int):
-    if user_id > len(database) or user_id < 1:
+def delete_user(user_id: int, session: Session = Depends(get_session)):
+    user_db = session.scalar(select(User).where(User.id == user_id))
+
+    if not user_db:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail='User not found'
         )
 
-    del database[user_id - 1]
+    session.delete(user_db)
+    session.commit()
 
     return {'message': 'User deleted'}
