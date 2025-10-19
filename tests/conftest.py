@@ -15,7 +15,7 @@ from fastapi_zero.models import User, table_registry
 from fastapi_zero.security import get_password_hash
 
 
-class Userfacdtory(factory.Factory):
+class UserFactory(factory.Factory):
     class Meta:
         model = User
 
@@ -69,11 +69,22 @@ def _mock_db_time(*, model, time=datetime(2025, 9, 25)):
 @pytest_asyncio.fixture
 async def user(session: AsyncSession):
     password = 'testtest'
-    user = User(
-        username='Teste',
-        email='teste@test.com',
-        password=get_password_hash(password),
-    )
+    user = UserFactory(password=get_password_hash(password))
+
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    user.clean_password = password
+
+    return user
+
+
+@pytest_asyncio.fixture
+async def other_user(session: AsyncSession):
+    password = 'testtest'
+    user = UserFactory(password=get_password_hash(password))
+
     session.add(user)
     await session.commit()
     await session.refresh(user)
