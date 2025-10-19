@@ -3,22 +3,16 @@ from datetime import datetime
 
 import factory
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import event
-
-from sqlalchemy.pool import StaticPool
-
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from fastapi_zero.app import app
 from fastapi_zero.database import get_session
 from fastapi_zero.models import User, table_registry
 from fastapi_zero.security import get_password_hash
-
-# @pytest.fixture
-# def client():
-#    return TestClient(app)
 
 
 class Userfacdtory(factory.Factory):
@@ -49,15 +43,14 @@ async def session():
         connect_args={'check_same_thread': False},
         poolclass=StaticPool,
     )
-    async with engine.begin() as conn: 
-        await conn.run_sync(table_registry.metadata.create_all) 
+    async with engine.begin() as conn:
+        await conn.run_sync(table_registry.metadata.create_all)
 
     async with AsyncSession(engine, expire_on_commit=False) as session:
         yield session
 
     async with engine.begin() as conn:
         await conn.run_sync(table_registry.metadata.drop_all)
-
 
 
 @contextmanager
@@ -73,8 +66,8 @@ def _mock_db_time(*, model, time=datetime(2025, 9, 25)):
     event.remove(model, 'before_insert', fake_time_hook)
 
 
-@pytest.fixture
-def user(session):
+@pytest_asyncio.fixture
+async def user(session: AsyncSession):
     password = 'testtest'
     user = User(
         username='Teste',
@@ -82,14 +75,12 @@ def user(session):
         password=get_password_hash(password),
     )
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    await session.commit()
+    await session.refresh(user)
 
     user.clean_password = password
 
     return user
-
-
 
 
 @pytest.fixture
