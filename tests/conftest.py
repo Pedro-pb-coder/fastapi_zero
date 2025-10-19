@@ -1,11 +1,15 @@
 from contextlib import contextmanager
 from datetime import datetime
 
+import factory
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session
+from sqlalchemy import event
+
 from sqlalchemy.pool import StaticPool
+
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from fastapi_zero.app import app
 from fastapi_zero.database import get_session
@@ -15,6 +19,15 @@ from fastapi_zero.security import get_password_hash
 # @pytest.fixture
 # def client():
 #    return TestClient(app)
+
+
+class Userfacdtory(factory.Factory):
+    class Meta:
+        model = User
+
+    username = factory.Sequence(lambda n: f'test{n}')
+    email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
+    password = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
 
 
 @pytest.fixture
@@ -29,20 +42,22 @@ def client(session):
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def session():
-    engine = create_engine(
-        'sqlite:///:memory:',
+@pytest_asyncio.fixture
+async def session():
+    engine = create_async_engine(
+        'sqlite+aiosqlite:///:memory:',
         connect_args={'check_same_thread': False},
         poolclass=StaticPool,
     )
+    async with engine.begin() as conn: 
+        await conn.run_sync(table_registry.metadata.create_all) 
 
-    table_registry.metadata.create_all(engine)
-
-    with Session(engine) as session:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
         yield session
 
-    table_registry.metadata.drop_all(engine)
+    async with engine.begin() as conn:
+        await conn.run_sync(table_registry.metadata.drop_all)
+
 
 
 @contextmanager
@@ -73,6 +88,8 @@ def user(session):
     user.clean_password = password
 
     return user
+
+
 
 
 @pytest.fixture
