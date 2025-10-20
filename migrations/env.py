@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 import asyncio
+import sys
 from sqlalchemy.ext.asyncio import async_engine_from_config 
 
 
@@ -81,8 +82,13 @@ async def run_async_migrations():
     await connectable.dispose()
 
 
-def run_migrations_online(): 
+def run_migrations_online():
     asyncio.run(run_async_migrations())
+
+
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 
 if context.is_offline_mode():
     run_migrations_offline()
